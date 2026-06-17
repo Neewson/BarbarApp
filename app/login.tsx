@@ -7,6 +7,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +21,7 @@ import { Colors, FontSize, FontWeight, Spacing, Radius, Shadow } from '@/constan
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { login, isLoading } = useAuth();
+  const { login, operationLoading } = useAuth();
   const { showAlert } = useAlert();
 
   const [role, setRole] = useState<UserRole>('client');
@@ -43,15 +44,9 @@ export default function LoginScreen() {
     try {
       await login(email, password, role);
       router.replace('/(tabs)');
-    } catch {
-      showAlert('Erro', 'Credenciais inválidas. Tente novamente.');
+    } catch (err: any) {
+      showAlert('Erro ao entrar', err?.message ?? 'Verifique suas credenciais e tente novamente.');
     }
-  };
-
-  const handleDemoLogin = async (demoRole: UserRole) => {
-    const demoEmail = demoRole === 'barber' ? 'barbeiro@barbar.app' : 'cliente@barbar.app';
-    await login(demoEmail, '123456', demoRole);
-    router.replace('/(tabs)');
   };
 
   return (
@@ -121,44 +116,23 @@ export default function LoginScreen() {
             isPassword
             error={errors.password}
           />
-
           <Pressable style={styles.forgotBtn}>
             <Text style={styles.forgotText}>Esqueci minha senha</Text>
           </Pressable>
         </View>
 
-        <Button
-          title="Entrar"
+        <Pressable
+          style={[styles.loginBtn, operationLoading && styles.loginBtnDisabled]}
           onPress={handleLogin}
-          loading={isLoading}
-          fullWidth
-          size="lg"
-        />
-
-        {/* Demo buttons */}
-        <View style={styles.demoSection}>
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Acesso demonstração</Text>
-            <View style={styles.dividerLine} />
-          </View>
-          <View style={styles.demoRow}>
-            <Pressable
-              style={styles.demoBtn}
-              onPress={() => handleDemoLogin('barber')}
-            >
-              <MaterialIcons name="content-cut" size={16} color={Colors.primary} />
-              <Text style={styles.demoBtnText}>Demo Barbeiro</Text>
-            </Pressable>
-            <Pressable
-              style={styles.demoBtn}
-              onPress={() => handleDemoLogin('client')}
-            >
-              <MaterialIcons name="person" size={16} color={Colors.accentLight} />
-              <Text style={[styles.demoBtnText, { color: Colors.accentLight }]}>Demo Cliente</Text>
-            </Pressable>
-          </View>
-        </View>
+          disabled={operationLoading}
+        >
+          {operationLoading ? (
+            <ActivityIndicator size={20} color={Colors.textInverse} />
+          ) : (
+            <MaterialIcons name="lock-open" size={20} color={Colors.textInverse} />
+          )}
+          <Text style={styles.loginBtnText}>{operationLoading ? 'Entrando...' : 'Entrar'}</Text>
+        </Pressable>
 
         {/* Register */}
         <View style={styles.registerRow}>
@@ -167,24 +141,21 @@ export default function LoginScreen() {
             <Text style={styles.registerLink}>Cadastrar</Text>
           </Pressable>
         </View>
+
+        {/* Security note */}
+        <View style={styles.securityNote}>
+          <MaterialIcons name="verified-user" size={14} color={Colors.success} />
+          <Text style={styles.securityNoteText}>Conexão segura • Dados criptografados (JWT)</Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.lg,
-  },
+  container: { flexGrow: 1, paddingHorizontal: Spacing.lg, gap: Spacing.lg },
 
-  logoArea: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
+  logoArea: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
   logoMark: {
     width: 48,
     height: 48,
@@ -196,30 +167,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Shadow.gold,
   },
-  logoText: {
-    fontSize: FontSize.xxl,
-    fontWeight: FontWeight.extrabold,
-    color: Colors.textPrimary,
-    letterSpacing: 3,
-  },
-  logoSub: {
-    fontSize: FontSize.xxl,
-    fontWeight: FontWeight.extrabold,
-    color: Colors.primary,
-    letterSpacing: 3,
-  },
+  logoText: { fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, color: Colors.textPrimary, letterSpacing: 3 },
+  logoSub: { fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, color: Colors.primary, letterSpacing: 3 },
 
-  heading: {
-    fontSize: FontSize.xxxl,
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  subheading: {
-    fontSize: FontSize.base,
-    color: Colors.textSecondary,
-    marginTop: -8,
-  },
+  heading: { fontSize: FontSize.xxxl, fontWeight: FontWeight.bold, color: Colors.textPrimary, letterSpacing: -0.5 },
+  subheading: { fontSize: FontSize.base, color: Colors.textSecondary, marginTop: -8 },
 
   roleToggle: {
     flexDirection: 'row',
@@ -239,60 +191,36 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: Radius.md,
   },
-  roleBtnActive: {
-    backgroundColor: Colors.primaryMuted,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  roleBtnText: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.medium,
-    color: Colors.textMuted,
-  },
+  roleBtnActive: { backgroundColor: Colors.primaryMuted, borderWidth: 1, borderColor: Colors.primary },
+  roleBtnText: { fontSize: FontSize.base, fontWeight: FontWeight.medium, color: Colors.textMuted },
   roleBtnTextActive: { color: Colors.primary },
 
   form: { gap: Spacing.md },
-
   forgotBtn: { alignSelf: 'flex-end' },
-  forgotText: {
-    fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: FontWeight.medium,
-  },
+  forgotText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.medium },
 
-  demoSection: { gap: Spacing.md },
-  divider: {
+  loginBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: Spacing.sm,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: 16,
+    ...Shadow.gold,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { fontSize: FontSize.xs, color: Colors.textMuted },
+  loginBtnDisabled: { opacity: 0.7 },
+  loginBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
-  demoRow: { flexDirection: 'row', gap: Spacing.md },
-  demoBtn: {
-    flex: 1,
+  registerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  registerText: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  registerLink: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.primary },
+
+  securityNote: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface2,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
   },
-  demoBtnText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.primary,
-  },
-
-  registerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  registerText: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  registerLink: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.primary },
+  securityNoteText: { fontSize: FontSize.xs, color: Colors.textMuted },
 });

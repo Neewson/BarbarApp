@@ -6,6 +6,7 @@ import {
   ScrollView,
   Pressable,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +29,7 @@ interface SettingItem {
 
 export default function ProfileTab() {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, logout, subscription, operationLoading } = useAuth();
   const { showAlert } = useAlert();
 
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -43,8 +44,8 @@ export default function ProfileTab() {
       {
         text: 'Sair',
         style: 'destructive',
-        onPress: () => {
-          logout();
+        onPress: async () => {
+          await logout();
           router.replace('/login');
         },
       },
@@ -58,7 +59,13 @@ export default function ProfileTab() {
         { icon: 'person-outline', label: 'Dados pessoais', subtitle: 'Nome, telefone, e-mail', onPress: () => {} },
         { icon: 'lock-outline', label: 'Segurança', subtitle: 'Senha e autenticação', onPress: () => {} },
         isBarber
-          ? { icon: 'store', label: 'Minha Barbearia', subtitle: 'Configurar estabelecimento', onPress: () => {}, badge: 'PRO' }
+          ? {
+              icon: 'star',
+              label: 'Assinatura',
+              subtitle: subscription.subscribed ? 'Plano Barbeiro ativo' : 'Assine para usar todos os recursos',
+              onPress: () => router.push('/subscription'),
+              badge: subscription.subscribed ? 'ATIVO' : 'VER PLANOS',
+            }
           : { icon: 'history', label: 'Histórico', subtitle: 'Cortes e agendamentos', onPress: () => {} },
       ],
     },
@@ -129,16 +136,41 @@ export default function ProfileTab() {
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.name}</Text>
             <View style={styles.rolePill}>
-              <MaterialIcons
-                name={isBarber ? 'content-cut' : 'person'}
-                size={13}
-                color={Colors.primary}
-              />
+              <MaterialIcons name={isBarber ? 'content-cut' : 'person'} size={13} color={Colors.primary} />
               <Text style={styles.rolePillText}>{isBarber ? 'Barbeiro' : 'Cliente'}</Text>
             </View>
-            <Text style={styles.profileEmail}>{user?.email || user?.phone}</Text>
+            <Text style={styles.profileEmail}>{user?.email}</Text>
           </View>
         </View>
+
+        {/* Subscription status card (barbers only) */}
+        {isBarber ? (
+          <Pressable
+            style={[styles.subCard, subscription.subscribed ? styles.subCardActive : styles.subCardInactive]}
+            onPress={() => router.push('/subscription')}
+          >
+            <View style={styles.subCardLeft}>
+              <MaterialIcons
+                name={subscription.subscribed ? 'verified' : 'lock-outline'}
+                size={24}
+                color={subscription.subscribed ? Colors.primary : Colors.textMuted}
+              />
+              <View>
+                <Text style={[styles.subCardTitle, !subscription.subscribed && styles.subCardTitleInactive]}>
+                  {subscription.subscribed ? 'Plano Barbeiro Ativo' : 'Sem assinatura'}
+                </Text>
+                <Text style={styles.subCardSub}>
+                  {subscription.subscribed
+                    ? subscription.subscription_end
+                      ? `Renova em ${new Date(subscription.subscription_end).toLocaleDateString('pt-BR')}`
+                      : 'Assinatura ativa'
+                    : 'Toque para assinar — R$ 49,90/mês'}
+                </Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={subscription.subscribed ? Colors.primary : Colors.textMuted} />
+          </Pressable>
+        ) : null}
 
         {/* Security indicator */}
         <View style={styles.securityBadge}>
@@ -166,23 +198,15 @@ export default function ProfileTab() {
                   disabled={!item.onPress && !item.toggle}
                 >
                   <View style={[styles.settingIcon, item.danger && styles.settingIconDanger]}>
-                    <MaterialIcons
-                      name={item.icon}
-                      size={20}
-                      color={item.danger ? Colors.error : Colors.primary}
-                    />
+                    <MaterialIcons name={item.icon} size={20} color={item.danger ? Colors.error : Colors.primary} />
                   </View>
                   <View style={styles.settingContent}>
-                    <Text style={[styles.settingLabel, item.danger && styles.settingLabelDanger]}>
-                      {item.label}
-                    </Text>
-                    {item.subtitle ? (
-                      <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
-                    ) : null}
+                    <Text style={[styles.settingLabel, item.danger && styles.settingLabelDanger]}>{item.label}</Text>
+                    {item.subtitle ? <Text style={styles.settingSubtitle}>{item.subtitle}</Text> : null}
                   </View>
                   {item.badge ? (
-                    <View style={styles.badgePill}>
-                      <Text style={styles.badgePillText}>{item.badge}</Text>
+                    <View style={[styles.badgePill, item.badge === 'ATIVO' && styles.badgePillGreen]}>
+                      <Text style={[styles.badgePillText, item.badge === 'ATIVO' && styles.badgePillTextGreen]}>{item.badge}</Text>
                     </View>
                   ) : null}
                   {item.toggle ? (
@@ -202,8 +226,11 @@ export default function ProfileTab() {
         ))}
 
         {/* Logout */}
-        <Pressable style={styles.logoutBtn} onPress={handleLogout}>
-          <MaterialIcons name="logout" size={20} color={Colors.error} />
+        <Pressable style={styles.logoutBtn} onPress={handleLogout} disabled={operationLoading}>
+          {operationLoading
+            ? <ActivityIndicator size={20} color={Colors.error} />
+            : <MaterialIcons name="logout" size={20} color={Colors.error} />
+          }
           <Text style={styles.logoutText}>Sair da conta</Text>
         </Pressable>
       </ScrollView>
@@ -213,7 +240,6 @@ export default function ProfileTab() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-
   pageTitle: {
     fontSize: FontSize.xxl,
     fontWeight: FontWeight.bold,
@@ -221,9 +247,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-
   content: { paddingHorizontal: Spacing.lg, gap: Spacing.lg },
-
   profileCard: {
     backgroundColor: Colors.surface2,
     borderRadius: Radius.xl,
@@ -274,7 +298,26 @@ const styles = StyleSheet.create({
   },
   rolePillText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.primary },
   profileEmail: { fontSize: FontSize.sm, color: Colors.textSecondary },
-
+  subCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+  },
+  subCardActive: {
+    backgroundColor: Colors.primaryMuted,
+    borderColor: Colors.primary,
+  },
+  subCardInactive: {
+    backgroundColor: Colors.surface2,
+    borderColor: Colors.border,
+  },
+  subCardLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  subCardTitle: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.primary },
+  subCardTitleInactive: { color: Colors.textSecondary },
+  subCardSub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   securityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -289,9 +332,14 @@ const styles = StyleSheet.create({
   securityTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.success },
   securitySub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   securityDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
-
   section: { gap: Spacing.sm },
-  sectionTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' },
+  sectionTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
   sectionCard: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
@@ -299,12 +347,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     overflow: 'hidden',
   },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    gap: Spacing.sm,
-  },
+  settingItem: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, gap: Spacing.sm },
   settingItemBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
   settingIcon: {
     width: 36,
@@ -326,7 +369,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgePillText: { fontSize: 10, fontWeight: FontWeight.bold, color: Colors.textInverse },
-
+  badgePillGreen: { backgroundColor: Colors.successMuted, borderWidth: 1, borderColor: Colors.success },
+  badgePillTextGreen: { color: Colors.success },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -30,6 +30,13 @@ export default function RootLayout() {
                 headerShown: false,
               }}
             />
+            <Stack.Screen
+              name="subscription"
+              options={{
+                presentation: 'card',
+                headerShown: false,
+              }}
+            />
           </Stack>
         </AuthProvider>
       </SafeAreaProvider>

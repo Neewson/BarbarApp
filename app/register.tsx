@@ -7,20 +7,20 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAlert } from '@/template';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { UserRole } from '@/contexts/AuthContext';
 import { Colors, FontSize, FontWeight, Spacing, Radius } from '@/constants/theme';
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
-  const { register, isLoading } = useAuth();
+  const { register, operationLoading } = useAuth();
   const { showAlert } = useAlert();
 
   const [role, setRole] = useState<UserRole>('client');
@@ -37,6 +37,8 @@ export default function RegisterScreen() {
     if (!name.trim()) e.name = 'Nome é obrigatório';
     if (!phone.trim()) e.phone = 'Telefone é obrigatório';
     if (!whatsapp.trim()) e.whatsapp = 'WhatsApp é obrigatório';
+    if (!email.trim()) e.email = 'E-mail é obrigatório';
+    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'E-mail inválido';
     if (!password) e.password = 'Senha é obrigatória';
     else if (password.length < 6) e.password = 'Mínimo 6 caracteres';
     if (password !== confirm) e.confirm = 'Senhas não conferem';
@@ -49,8 +51,8 @@ export default function RegisterScreen() {
     try {
       await register({ name, email, phone, whatsapp, password, role });
       router.replace('/(tabs)');
-    } catch {
-      showAlert('Erro', 'Não foi possível criar sua conta. Tente novamente.');
+    } catch (err: any) {
+      showAlert('Erro ao criar conta', err?.message ?? 'Tente novamente mais tarde.');
     }
   };
 
@@ -115,51 +117,22 @@ export default function RegisterScreen() {
           ))}
         </View>
 
+        {role === 'barber' ? (
+          <View style={styles.barberNote}>
+            <MaterialIcons name="info-outline" size={16} color={Colors.primary} />
+            <Text style={styles.barberNoteText}>
+              Conta Barbeiro requer assinatura de R$ 49,90/mês. Você poderá assinar após o cadastro.
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.form}>
-          <Input
-            label="Nome completo"
-            leftIcon="person"
-            placeholder="João Silva"
-            {...field('name', name, setName)}
-            autoCapitalize="words"
-          />
-          <Input
-            label="Telefone"
-            leftIcon="phone"
-            placeholder="(11) 99999-9999"
-            {...field('phone', phone, setPhone)}
-            keyboardType="phone-pad"
-          />
-          <Input
-            label="WhatsApp"
-            leftIcon="chat"
-            placeholder="(11) 99999-9999"
-            {...field('whatsapp', whatsapp, setWhatsapp)}
-            keyboardType="phone-pad"
-          />
-          <Input
-            label="E-mail (opcional)"
-            leftIcon="email"
-            placeholder="seu@email.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <Input
-            label="Senha"
-            leftIcon="lock"
-            placeholder="Mínimo 6 caracteres"
-            {...field('password', password, setPassword)}
-            isPassword
-          />
-          <Input
-            label="Confirmar senha"
-            leftIcon="lock-outline"
-            placeholder="Repita sua senha"
-            {...field('confirm', confirm, setConfirm)}
-            isPassword
-          />
+          <Input label="Nome completo" leftIcon="person" placeholder="João Silva" {...field('name', name, setName)} autoCapitalize="words" />
+          <Input label="Telefone" leftIcon="phone" placeholder="(11) 99999-9999" {...field('phone', phone, setPhone)} keyboardType="phone-pad" />
+          <Input label="WhatsApp" leftIcon="chat" placeholder="(11) 99999-9999" {...field('whatsapp', whatsapp, setWhatsapp)} keyboardType="phone-pad" />
+          <Input label="E-mail" leftIcon="email" placeholder="seu@email.com" {...field('email', email, setEmail)} keyboardType="email-address" autoCapitalize="none" />
+          <Input label="Senha" leftIcon="lock" placeholder="Mínimo 6 caracteres" {...field('password', password, setPassword)} isPassword />
+          <Input label="Confirmar senha" leftIcon="lock-outline" placeholder="Repita sua senha" {...field('confirm', confirm, setConfirm)} isPassword />
         </View>
 
         <View style={styles.terms}>
@@ -170,13 +143,18 @@ export default function RegisterScreen() {
           </Text>
         </View>
 
-        <Button
-          title="Criar Minha Conta"
+        <Pressable
+          style={[styles.registerBtn, operationLoading && styles.registerBtnDisabled]}
           onPress={handleRegister}
-          loading={isLoading}
-          fullWidth
-          size="lg"
-        />
+          disabled={operationLoading}
+        >
+          {operationLoading ? (
+            <ActivityIndicator size={20} color={Colors.textInverse} />
+          ) : (
+            <MaterialIcons name="person-add" size={20} color={Colors.textInverse} />
+          )}
+          <Text style={styles.registerBtnText}>{operationLoading ? 'Criando conta...' : 'Criar Minha Conta'}</Text>
+        </Pressable>
 
         <View style={styles.loginRow}>
           <Text style={styles.loginText}>Já tem conta? </Text>
@@ -190,84 +168,49 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.lg,
-  },
-
+  container: { flexGrow: 1, paddingHorizontal: Spacing.lg, gap: Spacing.lg },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40, height: 40, borderRadius: Radius.md,
+    backgroundColor: Colors.surface2, alignItems: 'center', justifyContent: 'center',
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoMark: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.primaryMuted,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 36, height: 36, borderRadius: Radius.sm,
+    backgroundColor: Colors.primaryMuted, borderWidth: 1, borderColor: Colors.primary,
+    alignItems: 'center', justifyContent: 'center',
   },
-  logoText: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.extrabold,
-    color: Colors.textPrimary,
-    letterSpacing: 2,
-  },
-
-  heading: {
-    fontSize: FontSize.xxxl,
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
+  logoText: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textPrimary, letterSpacing: 2 },
+  heading: { fontSize: FontSize.xxxl, fontWeight: FontWeight.bold, color: Colors.textPrimary, letterSpacing: -0.5 },
   subheading: { fontSize: FontSize.base, color: Colors.textSecondary, marginTop: -8 },
-
-  roleToggle: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
+  roleToggle: { flexDirection: 'row', gap: Spacing.sm },
   roleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: Spacing.md,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface2,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: Spacing.md, borderRadius: Radius.lg,
+    backgroundColor: Colors.surface2, borderWidth: 1, borderColor: Colors.border,
   },
-  roleBtnActive: {
-    backgroundColor: Colors.primaryMuted,
-    borderColor: Colors.primary,
-  },
+  roleBtnActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
   roleBtnTitle: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.textMuted },
   roleBtnTitleActive: { color: Colors.primary },
   roleBtnSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-
+  barberNote: {
+    flexDirection: 'row', gap: 8, backgroundColor: Colors.primaryMuted,
+    borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: `${Colors.primary}40`,
+  },
+  barberNoteText: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
   form: { gap: Spacing.md },
-
   terms: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: Colors.primaryMuted,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}30`,
+    flexDirection: 'row', gap: 8, backgroundColor: Colors.primaryMuted,
+    borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: `${Colors.primary}30`,
   },
   termsText: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
   termsLink: { color: Colors.primary, fontWeight: FontWeight.semibold },
-
+  registerBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.primary, borderRadius: Radius.lg, paddingVertical: 16,
+  },
+  registerBtnDisabled: { opacity: 0.7 },
+  registerBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textInverse },
   loginRow: { flexDirection: 'row', justifyContent: 'center' },
   loginText: { fontSize: FontSize.sm, color: Colors.textSecondary },
   loginLink: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.primary },
