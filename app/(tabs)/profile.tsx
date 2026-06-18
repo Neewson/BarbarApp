@@ -7,12 +7,17 @@ import {
   Pressable,
   Switch,
   ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  TextInput,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAlert } from '@/template';
 import { useAuth } from '@/hooks/useAuth';
+import { getSupabaseClient } from '@/template';
 import { Colors, FontSize, FontWeight, Spacing, Radius, Shadow } from '@/constants/theme';
 
 interface SettingItem {
@@ -29,12 +34,19 @@ interface SettingItem {
 
 export default function ProfileTab() {
   const insets = useSafeAreaInsets();
-  const { user, logout, subscription, operationLoading } = useAuth();
+  const { user, logout, subscription, operationLoading, refreshUser } = useAuth();
   const { showAlert } = useAlert();
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
+
+  // Edit modal state
+  const [editVisible, setEditVisible] = useState(false);
+  const [editName, setEditName] = useState(user?.name ?? '');
+  const [editPhone, setEditPhone] = useState(user?.phone ?? '');
+  const [editWhatsapp, setEditWhatsapp] = useState(user?.whatsapp ?? '');
+  const [saving, setSaving] = useState(false);
 
   const isBarber = user?.role === 'barber';
 
@@ -52,11 +64,45 @@ export default function ProfileTab() {
     ]);
   };
 
+  const openEdit = () => {
+    setEditName(user?.name ?? '');
+    setEditPhone(user?.phone ?? '');
+    setEditWhatsapp(user?.whatsapp ?? '');
+    setEditVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      showAlert('Atenção', 'Nome não pode ser vazio.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          username: editName.trim(),
+          phone: editPhone.trim(),
+          whatsapp: editWhatsapp.trim(),
+        })
+        .eq('id', user?.id ?? '');
+      if (error) throw new Error(error.message);
+      await refreshUser();
+      setEditVisible(false);
+      showAlert('Sucesso', 'Dados atualizados com sucesso.');
+    } catch (err: any) {
+      showAlert('Erro', err?.message ?? 'Não foi possível salvar.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const sections: { title: string; items: SettingItem[] }[] = [
     {
       title: 'Conta',
       items: [
-        { icon: 'person-outline', label: 'Dados pessoais', subtitle: 'Nome, telefone, e-mail', onPress: () => {} },
+        { icon: 'person-outline', label: 'Dados pessoais', subtitle: 'Nome, telefone, WhatsApp', onPress: openEdit },
         { icon: 'lock-outline', label: 'Segurança', subtitle: 'Senha e autenticação', onPress: () => {} },
         isBarber
           ? {
@@ -129,17 +175,29 @@ export default function ProfileTab() {
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
-            <Pressable style={styles.editAvatarBtn}>
-              <MaterialIcons name="camera-alt" size={14} color={Colors.textInverse} />
+            <Pressable style={styles.editAvatarBtn} onPress={openEdit}>
+              <MaterialIcons name="edit" size={13} color={Colors.textInverse} />
             </Pressable>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.name}</Text>
+            <Text style={styles.profileName}>{user?.name ?? '—'}</Text>
             <View style={styles.rolePill}>
               <MaterialIcons name={isBarber ? 'content-cut' : 'person'} size={13} color={Colors.primary} />
               <Text style={styles.rolePillText}>{isBarber ? 'Barbeiro' : 'Cliente'}</Text>
             </View>
-            <Text style={styles.profileEmail}>{user?.email}</Text>
+            <Text style={styles.profileEmail}>{user?.email ?? '—'}</Text>
+            {user?.phone ? (
+              <View style={styles.contactRow}>
+                <MaterialIcons name="phone" size={13} color={Colors.textMuted} />
+                <Text style={styles.contactText}>{user.phone}</Text>
+              </View>
+            ) : null}
+            {user?.whatsapp ? (
+              <View style={styles.contactRow}>
+                <MaterialIcons name="chat" size={13} color={Colors.textMuted} />
+                <Text style={styles.contactText}>{user.whatsapp}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -234,6 +292,88 @@ export default function ProfileTab() {
           <Text style={styles.logoutText}>Sair da conta</Text>
         </Pressable>
       </ScrollView>
+
+      {/* Edit profile modal */}
+      <Modal visible={editVisible} animationType="slide" transparent onRequestClose={() => setEditVisible(false)}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+            {/* Handle */}
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Dados pessoais</Text>
+              <Pressable onPress={() => setEditVisible(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color={Colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Nome completo</Text>
+                <View style={styles.fieldRow}>
+                  <MaterialIcons name="person-outline" size={18} color={Colors.textMuted} style={styles.fieldIcon} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={editName}
+                    onChangeText={setEditName}
+                    placeholder="Seu nome"
+                    placeholderTextColor={Colors.textMuted}
+                    autoCapitalize="words"
+                    selectionColor={Colors.primary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Telefone</Text>
+                <View style={styles.fieldRow}>
+                  <MaterialIcons name="phone" size={18} color={Colors.textMuted} style={styles.fieldIcon} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={editPhone}
+                    onChangeText={setEditPhone}
+                    placeholder="(11) 99999-9999"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="phone-pad"
+                    selectionColor={Colors.primary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>WhatsApp</Text>
+                <View style={styles.fieldRow}>
+                  <MaterialIcons name="chat" size={18} color={Colors.textMuted} style={styles.fieldIcon} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={editWhatsapp}
+                    onChangeText={setEditWhatsapp}
+                    placeholder="(11) 99999-9999"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="phone-pad"
+                    selectionColor={Colors.primary}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <Pressable
+              style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+              onPress={handleSaveProfile}
+              disabled={saving}
+            >
+              {saving
+                ? <ActivityIndicator size={18} color={Colors.textInverse} />
+                : <MaterialIcons name="check" size={18} color={Colors.textInverse} />
+              }
+              <Text style={styles.saveBtnText}>{saving ? 'Salvando...' : 'Salvar alterações'}</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -255,7 +395,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderLight,
     padding: Spacing.lg,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.md,
     ...Shadow.md,
   },
@@ -298,6 +438,9 @@ const styles = StyleSheet.create({
   },
   rolePillText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.primary },
   profileEmail: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
+  contactText: { fontSize: FontSize.xs, color: Colors.textMuted },
+
   subCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -306,18 +449,13 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
   },
-  subCardActive: {
-    backgroundColor: Colors.primaryMuted,
-    borderColor: Colors.primary,
-  },
-  subCardInactive: {
-    backgroundColor: Colors.surface2,
-    borderColor: Colors.border,
-  },
+  subCardActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
+  subCardInactive: { backgroundColor: Colors.surface2, borderColor: Colors.border },
   subCardLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   subCardTitle: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.primary },
   subCardTitleInactive: { color: Colors.textSecondary },
   subCardSub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+
   securityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -332,6 +470,7 @@ const styles = StyleSheet.create({
   securityTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.success },
   securitySub: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   securityDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
+
   section: { gap: Spacing.sm },
   sectionTitle: {
     fontSize: FontSize.sm,
@@ -371,6 +510,7 @@ const styles = StyleSheet.create({
   badgePillText: { fontSize: 10, fontWeight: FontWeight.bold, color: Colors.textInverse },
   badgePillGreen: { backgroundColor: Colors.successMuted, borderWidth: 1, borderColor: Colors.success },
   badgePillTextGreen: { color: Colors.success },
+
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -383,4 +523,66 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   logoutText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.error },
+
+  // Edit modal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 12,
+    gap: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  modalBody: { gap: Spacing.md },
+  fieldWrap: { gap: 6 },
+  fieldLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface2,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.md,
+    height: 52,
+  },
+  fieldIcon: { marginRight: 10 },
+  fieldInput: {
+    flex: 1,
+    fontSize: FontSize.base,
+    color: Colors.textPrimary,
+    includeFontPadding: false,
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: 15,
+    marginTop: 4,
+  },
+  saveBtnText: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.textInverse },
 });

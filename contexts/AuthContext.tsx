@@ -34,6 +34,7 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   refreshSubscription: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -136,12 +137,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (error) throw new Error(error.message);
       if (authData.user) {
-        await supabase.from('user_profiles').update({
+        // Wait for the DB trigger to create the profile row, then upsert
+        await new Promise(res => setTimeout(res, 800));
+        const { error: upsertError } = await supabase.from('user_profiles').upsert({
+          id: authData.user.id,
+          email: data.email,
           username: data.name,
           role: data.role,
           phone: data.phone,
           whatsapp: data.whatsapp,
-        }).eq('id', authData.user.id);
+        }, { onConflict: 'id' });
+        if (upsertError) console.warn('Profile upsert warning:', upsertError.message);
       }
     } finally {
       setOperationLoading(false);
@@ -159,6 +165,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadSubscription();
   };
 
+  const refreshUser = useCallback(async () => {
+    const { data: { session: sess } } = await supabase.auth.getSession();
+    if (sess) {
+      const u = await buildUser(sess);
+      setUser(u);
+    }
+  }, [buildUser]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -172,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         refreshSubscription,
+        refreshUser,
       }}
     >
       {children}

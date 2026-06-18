@@ -15,5 +15,6 @@ export function useAuth() {
     register: ctx.register,
     logout: ctx.logout,
     refreshSubscription: ctx.refreshSubscription,
+    refreshUser: ctx.refreshUser,
   };
 }
