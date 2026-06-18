@@ -44,14 +44,14 @@ const DEFAULT_SUB: SubscriptionStatus = {
   subscription_end: null,
 };
 
+const supabase = getSupabaseClient();
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [operationLoading, setOperationLoading] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionStatus>(DEFAULT_SUB);
-
-  const supabase = getSupabaseClient();
 
   const buildUser = useCallback(async (sess: Session): Promise<User | null> => {
     const { data: profile } = await supabase
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       whatsapp: profile.whatsapp ?? undefined,
       role: (profile.role as UserRole) ?? 'client',
     };
-  }, [supabase]);
+  }, []);
 
   const loadSubscription = useCallback(async () => {
     try {
@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         isLoading,
         operationLoading,
-        isAuthenticated: user !== null,
+        isAuthenticated: session !== null,
         subscription,
         login,
         register,

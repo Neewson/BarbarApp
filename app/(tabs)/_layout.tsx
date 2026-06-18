@@ -7,7 +7,11 @@ import { Colors } from '@/constants/theme';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Redirect href="/login" />;

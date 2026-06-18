@@ -92,7 +92,7 @@ export default function ClientHome() {
             { icon: 'event-available' as const, label: 'Agendar', onPress: () => router.push('/booking') },
             { icon: 'history' as const, label: 'Histórico', onPress: () => router.push('/agenda') },
             { icon: 'star-outline' as const, label: 'Favoritos', onPress: () => {} },
-            { icon: 'person-outline' as const, label: 'Perfil', onPress: () => router.push('/profile') },
+            { icon: 'person-outline' as const, label: 'Perfil', onPress: () => router.push('/(tabs)/profile') },
           ].map(a => (
             <Pressable key={a.label} style={styles.quickBtn} onPress={a.onPress}>
               <View style={styles.quickIcon}>
