@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBarberAppointments } from '@/hooks/useAppointments';
 import { AppointmentCard } from '@/components/feature/AppointmentCard';
 import { MetricCard } from '@/components/feature/MetricCard';
+import { router } from 'expo-router';
 import { BARBER_STATS, MOCK_BARBERSHOP } from '@/constants/mock-data';
 import { Colors, FontSize, FontWeight, Spacing, Radius, Shadow } from '@/constants/theme';
 
@@ -56,7 +57,7 @@ export default function BarberDashboard() {
         showsVerticalScrollIndicator={false}
       >
         {/* Shop Info */}
-        <View style={styles.shopCard}>
+        <Pressable style={styles.shopCard} onPress={() => router.push('/barber-shop')}>
           <View style={styles.shopCardLeft}>
             <View style={styles.shopIconWrap}>
               <MaterialIcons name="store" size={22} color={Colors.primary} />
@@ -69,11 +70,17 @@ export default function BarberDashboard() {
               </View>
             </View>
           </View>
-          <View style={styles.ratingWrap}>
-            <MaterialIcons name="star" size={14} color={Colors.primary} />
-            <Text style={styles.ratingText}>{MOCK_BARBERSHOP.rating}</Text>
+          <View style={styles.shopCardRight}>
+            <View style={styles.ratingWrap}>
+              <MaterialIcons name="star" size={14} color={Colors.primary} />
+              <Text style={styles.ratingText}>{MOCK_BARBERSHOP.rating}</Text>
+            </View>
+            <View style={styles.editShopBtn}>
+              <MaterialIcons name="edit" size={14} color={Colors.primary} />
+              <Text style={styles.editShopBtnText}>Editar</Text>
+            </View>
           </View>
-        </View>
+        </Pressable>
 
         {/* Metrics */}
         <Text style={styles.sectionTitle}>Hoje</Text>
@@ -232,8 +239,21 @@ const styles = StyleSheet.create({
   shopStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
   shopStatusText: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.medium },
+  shopCardRight: { alignItems: 'flex-end', gap: 6 },
   ratingWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   ratingText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  editShopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primaryMuted,
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}40`,
+  },
+  editShopBtnText: { fontSize: 10, fontWeight: FontWeight.bold, color: Colors.primary },
 
   sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
