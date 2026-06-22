@@ -1,58 +1,113 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Appointment,
   AppointmentStatus,
-  MOCK_APPOINTMENTS,
-  CLIENT_APPOINTMENTS,
-} from '@/constants/mock-data';
+  fetchBarberAppointmentsByDate,
+  fetchClientAppointments,
+  updateAppointmentStatus,
+} from '@/services/appointmentService';
 
-export function useBarberAppointments() {
-  const [appointments, setAppointments] = useState<Appointment[]>(MOCK_APPOINTMENTS);
+const POLL_INTERVAL = 30_000; // 30 seconds
 
-  const updateStatus = useCallback((id: string, status: AppointmentStatus) => {
-    setAppointments(prev =>
-      prev.map(a => (a.id === id ? { ...a, status } : a))
-    );
-  }, []);
+/** Hook for barber: loads appointments for a specific date, polls for updates */
+export function useBarberAppointments(barberId: string | undefined, date: string) {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const getTodayAppointments = useCallback(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return appointments.filter(a => a.date === today || a.date === '2026-06-16');
-  }, [appointments]);
+  const load = useCallback(async (showLoader = false) => {
+    if (!barberId) return;
+    if (showLoader) setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchBarberAppointmentsByDate(barberId, date);
+      setAppointments(data);
+    } catch (e: any) {
+      setError(e?.message ?? 'Erro ao carregar agenda');
+    } finally {
+      if (showLoader) setLoading(false);
+    }
+  }, [barberId, date]);
 
-  const getUpcoming = useCallback(() => {
-    return appointments.filter(a =>
-      a.status === 'booked' || a.status === 'confirmed'
-    );
-  }, [appointments]);
+  // Initial load + poll
+  useEffect(() => {
+    load(true);
+    intervalRef.current = setInterval(() => load(false), POLL_INTERVAL);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [load]);
 
-  return { appointments, updateStatus, getTodayAppointments, getUpcoming };
+  const updateStatus = useCallback(async (id: string, status: AppointmentStatus) => {
+    // Optimistic update
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    try {
+      await updateAppointmentStatus(id, status);
+    } catch {
+      // Revert on failure
+      await load(false);
+    }
+  }, [load]);
+
+  const refresh = useCallback(() => load(true), [load]);
+
+  // Derived helpers
+  const getTodayAppointments = useCallback(() => appointments, [appointments]);
+  const getUpcoming = useCallback(() =>
+    appointments.filter(a => a.status === 'booked' || a.status === 'confirmed'),
+  [appointments]);
+
+  return { appointments, loading, error, updateStatus, refresh, getTodayAppointments, getUpcoming };
 }
 
-export function useClientAppointments() {
-  const [appointments, setAppointments] = useState<Appointment[]>(CLIENT_APPOINTMENTS);
+/** Hook for client: loads all their appointments, polls for updates */
+export function useClientAppointments(clientId: string | undefined) {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const cancel = useCallback((id: string) => {
-    setAppointments(prev =>
-      prev.map(a => (a.id === id ? { ...a, status: 'cancelled' as AppointmentStatus } : a))
-    );
-  }, []);
+  const load = useCallback(async (showLoader = false) => {
+    if (!clientId) return;
+    if (showLoader) setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchClientAppointments(clientId);
+      setAppointments(data);
+    } catch (e: any) {
+      setError(e?.message ?? 'Erro ao carregar agendamentos');
+    } finally {
+      if (showLoader) setLoading(false);
+    }
+  }, [clientId]);
 
-  const getUpcoming = useCallback(() => {
-    return appointments.filter(
-      a => a.status === 'booked' || a.status === 'confirmed'
-    );
-  }, [appointments]);
+  useEffect(() => {
+    load(true);
+    intervalRef.current = setInterval(() => load(false), POLL_INTERVAL);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [load]);
 
-  const getHistory = useCallback(() => {
-    return appointments.filter(
-      a => a.status === 'done' || a.status === 'cancelled'
-    );
-  }, [appointments]);
+  const cancel = useCallback(async (id: string) => {
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'cancelled' as AppointmentStatus } : a));
+    try {
+      await updateAppointmentStatus(id, 'cancelled');
+    } catch {
+      await load(false);
+    }
+  }, [load]);
 
-  const addAppointment = useCallback((appt: Appointment) => {
-    setAppointments(prev => [appt, ...prev]);
-  }, []);
+  const refresh = useCallback(() => load(true), [load]);
 
-  return { appointments, cancel, getUpcoming, getHistory, addAppointment };
+  const getUpcoming = useCallback(() =>
+    appointments.filter(a => a.status === 'booked' || a.status === 'confirmed'),
+  [appointments]);
+
+  const getHistory = useCallback(() =>
+    appointments.filter(a => a.status === 'done' || a.status === 'cancelled'),
+  [appointments]);
+
+  return { appointments, loading, error, cancel, refresh, getUpcoming, getHistory };
 }

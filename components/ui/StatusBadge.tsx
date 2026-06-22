@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { AppointmentStatus } from '@/constants/mock-data';
+import { AppointmentStatus } from '@/services/appointmentService';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/theme';
 
 const STATUS_MAP: Record<AppointmentStatus, { label: string; bg: string; color: string }> = {

@@ -10,18 +10,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { useBarberAppointments } from '@/hooks/useAppointments';
+import { Appointment } from '@/services/appointmentService';
 import { AppointmentCard } from '@/components/feature/AppointmentCard';
 import { MetricCard } from '@/components/feature/MetricCard';
 import { router } from 'expo-router';
 import { BARBER_STATS, MOCK_BARBERSHOP } from '@/constants/mock-data';
+const TODAY = new Date().toISOString().split('T')[0];
 import { Colors, FontSize, FontWeight, Spacing, Radius, Shadow } from '@/constants/theme';
 
 export default function BarberDashboard() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { getTodayAppointments, updateStatus } = useBarberAppointments();
-  const todayAppts = getTodayAppointments();
-  const nextAppt = todayAppts.find(a => a.status === 'booked' || a.status === 'confirmed');
+  const { appointments: todayAppts, updateStatus } = useBarberAppointments(user?.id, TODAY);
+  const nextAppt = todayAppts.find((a: Appointment) => a.status === 'booked' || a.status === 'confirmed');
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -134,13 +135,13 @@ export default function BarberDashboard() {
             <Text style={styles.sectionTitle}>Próximo Atendimento</Text>
             <View style={styles.nextCard}>
               <View style={styles.nextTime}>
-                <Text style={styles.nextTimeText}>{nextAppt.time}</Text>
+                <Text style={styles.nextTimeText}>{nextAppt.appointment_time}</Text>
                 <Text style={styles.nextTimeLabel}>horário</Text>
               </View>
               <View style={styles.nextInfo}>
-                <Text style={styles.nextName}>{nextAppt.clientName}</Text>
+                <Text style={styles.nextName}>{nextAppt.client_name}</Text>
                 <Text style={styles.nextService}>{nextAppt.service}</Text>
-                <Text style={styles.nextPhone}>{nextAppt.clientPhone}</Text>
+                <Text style={styles.nextPhone}>{nextAppt.client_phone}</Text>
               </View>
               <Pressable
                 style={styles.startBtn}
