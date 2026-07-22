@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,77 +6,125 @@ import {
   FlatList,
   Pressable,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { BARBERSHOP_LIST, Barbershop } from '@/constants/mock-data';
+import { useAuth } from '@/hooks/useAuth';
+import { fetchAllBarbershops, Barbershop } from '@/services/appointmentService';
 import { Colors, FontSize, FontWeight, Spacing, Radius, Shadow } from '@/constants/theme';
 
 export default function ExploreTab() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
+  const [barbershops, setBarbershops] = useState<Barbershop[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = BARBERSHOP_LIST.filter(s =>
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchAllBarbershops();
+      setBarbershops(data);
+    } catch (e: any) {
+      setError(e?.message ?? 'Erro ao carregar barbearias');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = barbershops.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.address.toLowerCase().includes(search.toLowerCase())
+    (s.address ?? '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleBook = (shop: Barbershop) => {
+    router.push({ pathname: '/booking', params: { shopId: shop.id, shopName: shop.name, shopAddress: shop.address } });
+  };
 
   const renderItem = ({ item }: { item: Barbershop }) => (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={() => router.push('/booking')}
+      onPress={() => handleBook(item)}
     >
-      <Image
-        source={{ uri: item.photo }}
-        style={styles.cardPhoto}
-        contentFit="cover"
-        transition={200}
-      />
-      <View style={styles.cardBody}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-          <View style={styles.ratingChip}>
-            <MaterialIcons name="star" size={13} color={Colors.primary} />
-            <Text style={styles.ratingText}>{item.rating}</Text>
-            <Text style={styles.reviewCount}>({item.reviewCount})</Text>
+      {/* Header row */}
+      <View style={styles.cardHeader}>
+        <View style={styles.shopIconWrap}>
+          <MaterialIcons name="storefront" size={24} color={Colors.primary} />
+        </View>
+        <View style={styles.shopInfo}>
+          <Text style={styles.shopName} numberOfLines={1}>{item.name}</Text>
+          <View style={styles.shopAddressRow}>
+            <MaterialIcons name="location-on" size={13} color={Colors.textMuted} />
+            <Text style={styles.shopAddress} numberOfLines={1}>{item.address}</Text>
           </View>
         </View>
-        <View style={styles.infoRow}>
-          <MaterialIcons name="location-on" size={14} color={Colors.textMuted} />
-          <Text style={styles.address} numberOfLines={1}>{item.address}</Text>
+        <View style={styles.openBadge}>
+          <View style={styles.openDot} />
+          <Text style={styles.openText}>Aberto</Text>
         </View>
-        <View style={styles.infoRow}>
-          <MaterialIcons name="schedule" size={14} color={Colors.textMuted} />
-          <Text style={styles.hours}>{item.workingHours.start} – {item.workingHours.end}</Text>
-        </View>
+      </View>
 
-        <ScrollableTags services={item.services.slice(0, 3).map(s => s.name)} />
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.priceFrom}>
-            A partir de{' '}
-            <Text style={styles.priceValue}>
-              R$ {Math.min(...item.services.map(s => s.price))}
-            </Text>
-          </Text>
-          <Pressable style={styles.bookBtn} onPress={() => router.push('/booking')}>
-            <Text style={styles.bookBtnText}>Agendar</Text>
-            <MaterialIcons name="arrow-forward" size={14} color={Colors.textInverse} />
-          </Pressable>
+      {/* Details row */}
+      <View style={styles.detailRow}>
+        <View style={styles.detailItem}>
+          <MaterialIcons name="schedule" size={14} color={Colors.primary} />
+          <Text style={styles.detailText}>{item.work_start} – {item.work_end}</Text>
         </View>
+        <View style={styles.detailDivider} />
+        <View style={styles.detailItem}>
+          <MaterialIcons name="timer" size={14} color={Colors.primary} />
+          <Text style={styles.detailText}>{item.slot_interval} min/atend.</Text>
+        </View>
+        {item.phone ? (
+          <>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailItem}>
+              <MaterialIcons name="phone" size={14} color={Colors.primary} />
+              <Text style={styles.detailText} numberOfLines={1}>{item.phone}</Text>
+            </View>
+          </>
+        ) : null}
+      </View>
+
+      {/* Description */}
+      {item.description ? (
+        <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
+      ) : null}
+
+      {/* Footer */}
+      <View style={styles.cardFooter}>
+        {item.whatsapp ? (
+          <View style={styles.whatsappBadge}>
+            <MaterialIcons name="chat" size={13} color={Colors.success} />
+            <Text style={styles.whatsappText}>WhatsApp</Text>
+          </View>
+        ) : <View />}
+        <Pressable style={styles.bookBtn} onPress={() => handleBook(item)}>
+          <Text style={styles.bookBtnText}>Agendar</Text>
+          <MaterialIcons name="arrow-forward" size={14} color={Colors.textInverse} />
+        </Pressable>
       </View>
     </Pressable>
   );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Barbearias</Text>
-        <Text style={styles.subtitle}>{filtered.length} estabelecimentos</Text>
+        <Text style={styles.subtitle}>
+          {loading ? 'Carregando...' : `${filtered.length} estabelecimento${filtered.length !== 1 ? 's' : ''}`}
+        </Text>
       </View>
 
+      {/* Search */}
       <View style={styles.searchWrap}>
         <MaterialIcons name="search" size={20} color={Colors.textMuted} style={styles.searchIcon} />
         <TextInput
@@ -86,6 +134,7 @@ export default function ExploreTab() {
           value={search}
           onChangeText={setSearch}
           selectionColor={Colors.primary}
+          includeFontPadding={false}
         />
         {search.length > 0 ? (
           <Pressable onPress={() => setSearch('')} hitSlop={8}>
@@ -94,48 +143,54 @@ export default function ExploreTab() {
         ) : null}
       </View>
 
-      <FlatList
-        data={filtered}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <MaterialIcons name="search-off" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>Nenhuma barbearia encontrada</Text>
-          </View>
-        }
-      />
-    </View>
-  );
-}
-
-function ScrollableTags({ services }: { services: string[] }) {
-  return (
-    <View style={tagStyles.wrap}>
-      {services.map(s => (
-        <View key={s} style={tagStyles.tag}>
-          <Text style={tagStyles.tagText}>{s}</Text>
+      {error ? (
+        <View style={styles.errorWrap}>
+          <MaterialIcons name="error-outline" size={20} color={Colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable style={styles.retryBtn} onPress={load}>
+            <Text style={styles.retryBtnText}>Tentar novamente</Text>
+          </Pressable>
         </View>
-      ))}
+      ) : (
+        <FlatList
+          data={filtered}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 80 }]}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={load}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.empty}>
+                {search.length > 0 ? (
+                  <>
+                    <MaterialIcons name="search-off" size={48} color={Colors.textMuted} />
+                    <Text style={styles.emptyTitle}>Nenhum resultado</Text>
+                    <Text style={styles.emptyText}>Tente outro nome ou endereço</Text>
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcons name="store" size={48} color={Colors.textMuted} />
+                    <Text style={styles.emptyTitle}>Nenhuma barbearia cadastrada</Text>
+                    <Text style={styles.emptyText}>As barbearias aparecerão aqui quando se cadastrarem.</Text>
+                  </>
+                )}
+              </View>
+            ) : null
+          }
+        />
+      )}
     </View>
   );
 }
-
-const tagStyles = StyleSheet.create({
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  tag: {
-    backgroundColor: Colors.surface3,
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  tagText: { fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeight.medium },
-});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
@@ -145,70 +200,82 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
 
   searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface2,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    height: 50,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.surface2, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border,
+    marginHorizontal: Spacing.lg, marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.md, height: 50,
   },
   searchIcon: { marginRight: 8 },
-  searchInput: {
-    flex: 1,
-    fontSize: FontSize.base,
-    color: Colors.textPrimary,
-    includeFontPadding: false,
-  },
+  searchInput: { flex: 1, fontSize: FontSize.base, color: Colors.textPrimary },
 
-  list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl, paddingTop: 4 },
+  list: { paddingHorizontal: Spacing.lg, paddingTop: 4 },
 
   card: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: Colors.border,
-    overflow: 'hidden',
+    padding: Spacing.md,
+    gap: Spacing.sm,
     ...Shadow.md,
   },
   cardPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
-  cardPhoto: { width: '100%', height: 180 },
-  cardBody: { padding: Spacing.md, gap: 8 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardName: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, flex: 1 },
-  ratingChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: Colors.primaryMuted,
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  ratingText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.primary },
-  reviewCount: { fontSize: FontSize.xs, color: Colors.textMuted },
 
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  address: { flex: 1, fontSize: FontSize.sm, color: Colors.textSecondary },
-  hours: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  shopIconWrap: {
+    width: 52, height: 52, borderRadius: Radius.lg,
+    backgroundColor: Colors.primaryMuted, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: `${Colors.primary}40`,
+  },
+  shopInfo: { flex: 1 },
+  shopName: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  shopAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  shopAddress: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary },
+  openBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(16,201,123,0.1)', borderRadius: Radius.full,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: 'rgba(16,201,123,0.3)',
+  },
+  openDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
+  openText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.success },
+
+  detailRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.surface2, borderRadius: Radius.md,
+    padding: Spacing.md, gap: Spacing.sm,
+  },
+  detailItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  detailDivider: { width: 1, height: 16, backgroundColor: Colors.border, marginHorizontal: 4 },
+  detailText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
+
+  description: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20, paddingHorizontal: 2 },
 
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
-  priceFrom: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  priceValue: { fontWeight: FontWeight.bold, color: Colors.primary },
+  whatsappBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(16,201,123,0.1)', borderRadius: Radius.full,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  whatsappText: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.medium },
   bookBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.md,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.primary, borderRadius: Radius.md,
+    paddingVertical: 10, paddingHorizontal: 16,
+    ...Shadow.gold,
   },
   bookBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
+  errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: Spacing.xl },
+  errorText: { fontSize: FontSize.sm, color: Colors.error, textAlign: 'center' },
+  retryBtn: {
+    paddingVertical: 10, paddingHorizontal: 24, borderRadius: Radius.full,
+    backgroundColor: Colors.errorMuted, borderWidth: 1, borderColor: Colors.error,
+  },
+  retryBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.error },
+
   empty: { alignItems: 'center', paddingVertical: 60, gap: 12 },
-  emptyText: { fontSize: FontSize.base, color: Colors.textSecondary },
+  emptyTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  emptyText: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: Spacing.xl },
 });

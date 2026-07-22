@@ -44,6 +44,13 @@ export default function RootLayout() {
                 headerShown: false,
               }}
             />
+            <Stack.Screen
+              name="new-appointment"
+              options={{
+                presentation: 'card',
+                headerShown: false,
+              }}
+            />
           </Stack>
         </AuthProvider>
       </SafeAreaProvider>
